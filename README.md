@@ -121,7 +121,7 @@ The coordinate transformation step consists of following transformations:
 #### Preview of the output video
 
 [output_gif]: ./output/test_mapping.gif
-![output_gif][output_gif_todo]
+![output_gif][output_gif]
 
 ### Autonomous Navigation and Mapping
 
