@@ -4,6 +4,132 @@ from PIL import Image
 from io import BytesIO, StringIO
 import base64
 import time
+from skimage.morphology import skeletonize
+from matplotlib import pyplot as plt
+import matplotlib.image as mpimg
+import heapq
+import sys
+
+class PriorityQueue:
+    def __init__(self):
+        self.elements = []
+    
+    def empty(self):
+        return len(self.elements) == 0
+    
+    def put(self, item, priority):
+        heapq.heappush(self.elements, (priority, item))
+    
+    def get(self):
+        return heapq.heappop(self.elements)[1]
+    
+class Graph:
+    def __init__(self, image):
+        self.image = image
+    def cost(self, a, b):
+        return np.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+    def neighbors(self, a):
+        res = []
+        for i in range (-1,2):
+            for j in range (-1,2):
+                if not(i == 0 and j == 0) and self.image[a[0]+i, a[1]+j]>0: res.append((a[0]+i, a[1]+j))
+        return res
+    
+def heuristic(a, b):
+    (x1, y1) = a
+    (x2, y2) = b
+    return abs(x1 - x2) + abs(y1 - y2)
+
+def get_path(start, end, came_from):
+    path = []
+    node = end
+    while node != start:   
+        path.append(node)
+        if node in came_from:
+            node = came_from[node]
+        else:
+            return []
+
+    if len(path) < 2:
+        path = [start, end]
+
+    return path[::-1]
+
+def a_star_search(graph, start, goal):
+    frontier = PriorityQueue()
+    frontier.put(start, 0)
+    came_from = {}
+    cost_so_far = {}
+    came_from[start] = None
+    cost_so_far[start] = 0
+    
+    while not frontier.empty():
+        current = frontier.get()
+        
+        if current == goal:
+            break
+        
+        for next in graph.neighbors(current):
+            new_cost = cost_so_far[current] + graph.cost(current, next)
+            if next not in cost_so_far or new_cost < cost_so_far[next]:
+                cost_so_far[next] = new_cost
+                priority = new_cost + heuristic(goal, next)
+                frontier.put(next, priority)
+                came_from[next] = current
+    
+    return get_path(start, goal, came_from)
+
+def find_borders(grid):
+    borders = []
+    for i in range(grid.shape[0]):
+        for j in range(grid.shape[1]):
+            if grid[i, j] == 1:
+                border = []
+                dfs(grid, i, j, border)
+                borders.append(border)
+    return borders
+
+def dfs(grid, i, j, border):
+    if i<0 or j<0 or i>=grid.shape[0] or j>=grid.shape[0] or grid[i, j] != 1:
+        return
+    grid[i, j] = 2
+    border.append((i, j))
+    dfs(grid, i+1, j, border)
+    dfs(grid, i-1, j, border)
+    dfs(grid, i, j+1, border)
+    dfs(grid, i, j-1, border)
+    dfs(grid, i+1, j+1, border)
+    dfs(grid, i-1, j+1, border)
+    dfs(grid, i+1, j-1, border)
+    dfs(grid, i-1, j-1, border)
+
+def get_border_points(Rover):
+    grid = np.zeros(Rover.worldmap.shape[:2], np.int)
+    # go through the world map pixels and find navigable pixels with unexplored pixels in their vicinity
+    for i in range(10, Rover.worldmap.shape[0] - 10):
+        for j in range(10, Rover.worldmap.shape[1] - 10):
+            if Rover.worldmap[i,j,2] == 255 and Rover.worldmap[i,j,0] == 0:
+                for m in range(i-3, i+3):
+                    for n in range(j-3, j+3):
+                        if all(Rover.worldmap[m, n, :] == [0, 0, 0]):
+                            grid[i,j] = 1
+
+    #find all border point confidantes for display purposes only
+    Rover.borders = list(zip(*[list(e) for e in grid.nonzero()]))
+    #find all the separated border blobs by depth first search algorithm
+    borders = find_borders(grid)
+    #calculate the center point of each border blob
+    border_points = [np.mean([*zip(*b)],1).astype(np.int) for b in borders]
+    Rover.border_points = np.array(border_points).T
+
+def update_map_vars(Rover):
+    get_border_points(Rover)
+    nav_map = (Rover.worldmap[:,:, 2] > 0).astype(np.uint8)
+    skel = skeletonize(nav_map)
+    Rover.graph = Graph(skel) 
+    Rover.map_points = skel.nonzero()
+
+
 
 # Define a function to convert telemetry strings to float independent of decimal convention
 def convert_to_float(string_to_convert):
@@ -28,7 +154,7 @@ def update_rover(Rover, data):
             if np.isfinite(tot_time):
                   Rover.total_time = tot_time
       # Print out the fields in the telemetry data dictionary
-      print(data.keys())
+#      print(data.keys())
       # The current speed of the rover in m/s
       Rover.vel = convert_to_float(data["speed"])
       # The current position of the rover
@@ -50,11 +176,11 @@ def update_rover(Rover, data):
       # Update number of rocks collected
       Rover.samples_collected = Rover.samples_to_find - np.int(data["sample_count"])
 
-      print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
-      Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample:', Rover.near_sample, 
-      'picking_up:', data["picking_up"], 'sending pickup:', Rover.send_pickup, 
-      'total time:', Rover.total_time, 'samples remaining:', data["sample_count"], 
-      'samples collected:', Rover.samples_collected)
+      # print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
+      # Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample:', Rover.near_sample, 
+      # 'picking_up:', data["picking_up"], 'sending pickup:', Rover.send_pickup, 
+      # 'total time:', Rover.total_time, 'samples remaining:', data["sample_count"], 
+      # 'samples collected:', Rover.samples_collected)
       # Get the current image from the center camera of the rover
       imgString = data["image"]
       image = Image.open(BytesIO(base64.b64decode(imgString)))
@@ -125,9 +251,31 @@ def create_output_images(Rover):
             fidelity = round(100*good_nav_pix/(tot_nav_pix), 1)
       else:
             fidelity = 0
+
+      for p in Rover.borders:
+            map_add[p[0], p[1]] = [0, 255, 255]
+
+      for p in Rover.path:
+            map_add[p[0], p[1]] = [255, 255, 0]
+            map_add[p[0]+1, p[1]] = [255, 255, 0]
+            map_add[p[0]-1, p[1]] = [255, 255, 0]
+            map_add[p[0], p[1]+1] = [255, 255, 0]
+            map_add[p[0], p[1]-1] = [255, 255, 0]
+
+
+      i, j = int(Rover.pos[1]), int(Rover.pos[0])
+      map_add[i, j] = [255, 255, 255]
+      map_add[i, j+1] = [255, 255, 255]
+      map_add[i, j+2] = [255, 255, 255]
+      map_add[i, j-1] = [255, 255, 255]
+      map_add[i, j-2] = [255, 255, 255]
+      map_add[i+1, j] = [255, 255, 255]
+      map_add[i+2, j] = [255, 255, 255]
+      map_add[i-1, j] = [255, 255, 255]
+      map_add[i-2, j] = [255, 255, 255]
       # Flip the map for plotting so that the y-axis points upward in the display
       map_add = np.flipud(map_add).astype(np.float32)
-      # Add some text about map and rock sample detection results
+      # # Add some text about map and rock sample detection results
       cv2.putText(map_add,"Time: "+str(np.round(Rover.total_time, 1))+' s', (0, 10), 
                   cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
       cv2.putText(map_add,"Mapped: "+str(perc_mapped)+'%', (0, 25), 
@@ -140,12 +288,17 @@ def create_output_images(Rover):
                   cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
       cv2.putText(map_add,"  Collected: "+str(Rover.samples_collected), (0, 85), 
                   cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
-      # Convert map and vision image to base64 strings for sending to server
+
+      cv2.putText(map_add,"obst: "+ str(Rover.near_obstacle)[0], (130, 10), 
+                  cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
+
+
       pil_img = Image.fromarray(map_add.astype(np.uint8))
       buff = BytesIO()
       pil_img.save(buff, format="JPEG")
       encoded_string1 = base64.b64encode(buff.getvalue()).decode("utf-8")
       
+
       pil_img = Image.fromarray(Rover.vision_image.astype(np.uint8))
       buff = BytesIO()
       pil_img.save(buff, format="JPEG")

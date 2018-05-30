@@ -30,6 +30,7 @@ app = Flask(__name__)
 # NOTE: images are read in by default with the origin (0, 0) in the upper left
 # and y-axis increasing downward.
 ground_truth = mpimg.imread('../calibration_images/map_bw.png')
+
 # This next line creates arrays of zeros in the red and blue channels
 # and puts the map into the green channel.  This is why the underlying 
 # map output looks green in the display image
@@ -52,16 +53,18 @@ class RoverState():
         self.nav_angles = None # Angles of navigable terrain pixels
         self.nav_dists = None # Distances of navigable terrain pixels
         self.ground_truth = ground_truth_3d # Ground truth worldmap
-        self.mode = 'forward' # Current mode (can be forward or stop)
+        self.mode = 'book_start' # Current mode (can be forward or stop)
+        self.explore_time = time.time()
+        self.explored_pixels = 0
         self.throttle_set = 0.2 # Throttle setting when accelerating
-        self.brake_set = 10 # Brake setting when braking
+        self.brake_set = 0.3 # Brake setting when braking
         # The stop_forward and go_forward fields below represent total count
         # of navigable terrain pixels.  This is a very crude form of knowing
         # when you can keep going and when you should stop.  Feel free to
         # get creative in adding new fields or modifying these!
         self.stop_forward = 50 # Threshold to initiate stopping
         self.go_forward = 500 # Threshold to go forward again
-        self.max_vel = 2 # Maximum velocity (meters/second)
+        self.max_vel = 2.0 # Maximum velocity (meters/second)
         # Image output from perception step
         # Update this image to display your intermediate analysis steps
         # on screen in autonomous mode
@@ -77,6 +80,23 @@ class RoverState():
         self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
+
+        self.graph = None
+        self.path = []
+        self.map_points = None
+        self.path_counter = 0
+        self.border_points = []
+        self.borders = []
+        self.path_step_time = None
+        self.near_obstacle = False
+        self.rock_angles = []
+        self.rock_dists = [] 
+        self.obs_angles = []
+        self.obs_dists = []
+        self.start_pos_on_map = None
+        self.done_searching = False
+
+
 # Initialize our rover 
 Rover = RoverState()
 
@@ -167,6 +187,10 @@ def send_control(commands, image_string1, image_string2):
         'inset_image1': image_string1,
         'inset_image2': image_string2,
         }
+    # data={
+    #     'inset_image1': image_string1,
+    #     'inset_image2': image_string2,
+    #     }
     # Send commands via socketIO server
     sio.emit(
         "data",
