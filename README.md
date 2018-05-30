@@ -84,7 +84,7 @@ def rock_color_thresh(img, rgb_thresh=(110,70,50)):
 Following images show the result of above thresholding steps on a sample image:
 
 
-[rock_image]: ../calibration_images/example_rock1.jpg
+[rock_image]: ./calibration_images/example_rock1.jpg
 [rock_threshold]: ./misc/rock_threshold.jpg
 [nav_threshold]: ./misc/nav_threshold.jpg
 [obs_threshold]: ./misc/obs_threshold.jpg
@@ -140,6 +140,10 @@ In decision step, the rover operates in one of the following modes:
 - 'follow_path': In this mode, the rover follows the assigned path step by step. In each step, the steering angle is set to the closest navigable terrain angle to the direction of current path point. If there is not navigable terrain angle, the mode is changed to 'obst_avoid'. If the rover's location is close enough to the path point, the rover proceeds toward the next path point.
 
 - 'obst_avoid': This mode has similar function as the initially provided 'stop' mode. If the rover is close to an obstacle or mountains, the mode is changed to this mode to avoid obstacle. In this mode, the speed is set to zero and rover turns counter-clockwise until there is no obstacle detected ahead. the mode is then changed to 'explore' because 'explore' mode helps the rover to find a navigable path to get far from the obstacle.
+
+- 'book_start': Just to book the rover initial position to return the same postion at the end.
+- 'pick_rock' : When a rock pixel is detected the rover's mode is switched to this mode to pick up the rock.
+- 'done': When there is no border point remained, it means that the search is done and the rover returns to the initial positon. Upon arrival to the initial position, the mode is switched to 'done' and no furthor action is made.
 
 In the following sections, each computational element used in the decision step is explained:
 
