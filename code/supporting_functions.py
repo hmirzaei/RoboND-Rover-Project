@@ -10,6 +10,7 @@ import matplotlib.image as mpimg
 import heapq
 import sys
 
+# A* search codes are obtained from https://www.redblobgames.com/pathfinding/a-star/implementation.html
 class PriorityQueue:
     def __init__(self):
         self.elements = []
