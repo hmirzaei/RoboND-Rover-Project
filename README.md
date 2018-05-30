@@ -228,6 +228,8 @@ Rover.map_points = skel.nonzero()
 
 After finding the skeleton map, the closest points on the skeleton to the current location and the border point are found and the A* search is ran on them as start and the goal points. The path points are down-sampled by a factor of 5 to smooth out the path for the path planning step.
 
+(A* search codes are obtained from https://www.redblobgames.com/pathfinding/a-star/implementation.html)
+
 [path_image]: ./misc/path.png
 ![path_image][path_image]  
 
